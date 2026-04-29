@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: safeprayag-api
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: MONGODB_URL
+        sync: false
+      - key: SECRET_KEY
+        sync: false
+      - key: FAST2SMS_API_KEY
+        sync: false
+      - key: ALLOWED_ORIGINS
+        value: https://safeprayag.vercel.app
+    autoDeploy: true
