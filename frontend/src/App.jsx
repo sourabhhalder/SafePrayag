@@ -4,14 +4,15 @@ import Header from './components/Header';
 import Footer from './components/Footer';
 import ProtectedRoute from './components/ProtectedRoute';
 
-import Home          from './pages/Home';
-import Login         from './pages/Login';
-import Signup        from './pages/Signup';
-import Profile       from './pages/Profile';
-import Dashboard     from './pages/Dashboard';
-import RouteEnquiry  from './pages/RouteEnquiry';
+import Home         from './pages/Home';
+import Login        from './pages/Login';
+import Signup       from './pages/Signup';
+import Profile      from './pages/Profile';
+import Dashboard    from './pages/Dashboard';
+import RouteEnquiry from './pages/RouteEnquiry';
+import FAQ          from './pages/FAQ';
+import Blog         from './pages/Blog';
 
-// Leaflet CSS (also in public/index.html — belt-and-suspenders)
 import 'leaflet/dist/leaflet.css';
 
 export default function App() {
@@ -22,9 +23,11 @@ export default function App() {
           <Header />
           <div style={{ flex: 1 }}>
             <Routes>
-              <Route path="/"       element={<Home />} />
-              <Route path="/login"  element={<Login />} />
-              <Route path="/signup" element={<Signup />} />
+              <Route path="/"          element={<Home />} />
+              <Route path="/login"     element={<Login />} />
+              <Route path="/signup"    element={<Signup />} />
+              <Route path="/faq"       element={<FAQ />} />
+              <Route path="/blog"      element={<Blog />} />
               <Route path="/profile"   element={<ProtectedRoute><Profile /></ProtectedRoute>} />
               <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
               <Route path="/route"     element={<ProtectedRoute><RouteEnquiry /></ProtectedRoute>} />

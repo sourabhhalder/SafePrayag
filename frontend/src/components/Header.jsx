@@ -23,102 +23,84 @@ const Logo = () => (
 );
 
 const navStyle = ({ isActive }) => ({
-  fontFamily: 'var(--font-cond)',
-  fontWeight: 600,
-  fontSize: 14,
-  letterSpacing: '0.8px',
-  textTransform: 'uppercase',
+  fontFamily: 'var(--font-cond)', fontWeight: 600, fontSize: 13,
+  letterSpacing: '0.8px', textTransform: 'uppercase',
   color: isActive ? 'var(--red)' : 'var(--text-2)',
-  textDecoration: 'none',
-  padding: '6px 0',
+  textDecoration: 'none', padding: '6px 0',
   borderBottom: isActive ? '2px solid var(--red)' : '2px solid transparent',
   transition: 'all 0.2s',
 });
 
 export default function Header() {
   const { user, isAuthenticated, logout } = useAuth();
-  const navigate = useNavigate();
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [sosBusy, setSosBusy] = useState(false);
+  const navigate  = useNavigate();
+  const [menuOpen, setMenuOpen]   = useState(false);
+  const [sosBusy,  setSosBusy]    = useState(false);
 
-  const handleLogout = () => {
-    logout();
-    navigate('/');
-    setMenuOpen(false);
-  };
+  const handleLogout = () => { logout(); navigate('/'); setMenuOpen(false); };
 
   const handleQuickSOS = async () => {
     if (sosBusy) return;
     setSosBusy(true);
-    try {
-      navigator.geolocation.getCurrentPosition(async pos => {
-        const { latitude, longitude } = pos.coords;
-        const res = await triggerSOS({ lat: latitude, lon: longitude });
-        alert(`🆘 SOS TRIGGERED!\n${res.data.nearest_police.name}\n📞 ${res.data.nearest_police.phone}\nGuardian notified: ${res.data.guardian_notified ? 'Yes ✅' : 'No (add guardian in profile)'}`);
-      }, () => {
-        alert('Could not get location. Allow location access and try again.');
-      });
-    } catch (e) {
-      alert('SOS failed: ' + (e.response?.data?.detail || e.message));
-    } finally {
-      setSosBusy(false);
-    }
+    navigator.geolocation.getCurrentPosition(
+      async pos => {
+        try {
+          const res = await triggerSOS({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+          alert(`🆘 SOS TRIGGERED!\n${res.data.nearest_police.name}\n📞 ${res.data.nearest_police.phone}\nGuardian notified: ${res.data.guardian_notified ? 'Yes ✅' : 'No — add guardian phone in Profile'}`);
+        } catch (e) {
+          alert('SOS error: ' + (e.response?.data?.detail || e.message));
+        } finally { setSosBusy(false); }
+      },
+      () => { alert('Allow location access to use SOS.'); setSosBusy(false); }
+    );
   };
 
   return (
     <header style={{
-      background: 'rgba(13,13,26,0.95)', backdropFilter: 'blur(20px)',
+      background: 'rgba(13,13,26,0.97)', backdropFilter: 'blur(20px)',
       borderBottom: '1px solid var(--border)', position: 'sticky', top: 0, zIndex: 100,
     }}>
-      <div className="container" style={{ height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 24 }}>
+      <div className="container" style={{ height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
         <Logo />
 
         {/* Desktop Nav */}
-        <nav style={{ display: 'flex', gap: 28, alignItems: 'center' }} className="desktop-nav">
-          <NavLink to="/" style={navStyle} end>Home</NavLink>
+        <nav style={{ display: 'flex', gap: 22, alignItems: 'center' }} className="desktop-nav">
+          <NavLink to="/"    style={navStyle} end>Home</NavLink>
+          <NavLink to="/blog" style={navStyle}>Blog</NavLink>
+          <NavLink to="/faq"  style={navStyle}>FAQ</NavLink>
           {isAuthenticated && <>
             <NavLink to="/dashboard" style={navStyle}>Dashboard</NavLink>
             <NavLink to="/route"     style={navStyle}>Route Check</NavLink>
           </>}
         </nav>
 
-        {/* Right Actions */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        {/* Right */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           {isAuthenticated && (
-            <button
-              onClick={handleQuickSOS}
-              disabled={sosBusy}
-              style={{
-                background: 'var(--red)', color: 'white', border: 'none',
-                borderRadius: 20, padding: '8px 18px',
-                fontFamily: 'var(--font-display)', fontWeight: 700,
-                fontSize: 13, letterSpacing: 1, cursor: 'pointer',
-                animation: 'pulse-red 2s infinite',
-                opacity: sosBusy ? 0.7 : 1,
-              }}
-            >
+            <button onClick={handleQuickSOS} disabled={sosBusy} style={{
+              background: 'var(--red)', color: 'white', border: 'none',
+              borderRadius: 20, padding: '8px 18px',
+              fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 13,
+              letterSpacing: 1, cursor: 'pointer', animation: 'pulse-red 2s infinite',
+              opacity: sosBusy ? 0.7 : 1,
+            }}>
               {sosBusy ? '…' : '🆘 SOS'}
             </button>
           )}
 
           {isAuthenticated ? (
             <div style={{ position: 'relative' }}>
-              <button
-                onClick={() => setMenuOpen(!menuOpen)}
-                style={{
-                  background: 'var(--bg-card)', border: '1px solid var(--border)',
-                  borderRadius: 20, padding: '6px 14px',
-                  display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
-                  fontFamily: 'var(--font-cond)', fontSize: 13, color: 'var(--text)',
-                }}
-              >
+              <button onClick={() => setMenuOpen(!menuOpen)} style={{
+                background: 'var(--bg-card)', border: '1px solid var(--border)',
+                borderRadius: 20, padding: '6px 14px',
+                display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
+                fontFamily: 'var(--font-cond)', fontSize: 13, color: 'var(--text)',
+              }}>
                 <span style={{
-                  width: 26, height: 26, background: 'var(--violet)',
-                  borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  width: 26, height: 26, background: 'var(--violet)', borderRadius: '50%',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: 12, fontWeight: 700,
-                }}>
-                  {user?.name?.charAt(0).toUpperCase() || 'U'}
-                </span>
+                }}>{user?.name?.charAt(0).toUpperCase() || 'U'}</span>
                 {user?.name?.split(' ')[0]}
                 <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>▾</span>
               </button>
@@ -126,45 +108,38 @@ export default function Header() {
                 <div style={{
                   position: 'absolute', right: 0, top: '110%',
                   background: 'var(--bg-card)', border: '1px solid var(--border)',
-                  borderRadius: 10, minWidth: 180, boxShadow: 'var(--shadow)',
-                  overflow: 'hidden', zIndex: 200,
+                  borderRadius: 10, minWidth: 180, boxShadow: 'var(--shadow)', zIndex: 200, overflow: 'hidden',
                 }}>
                   {[
-                    { label: '👤  Profile', to: '/profile' },
-                    { label: '📊  Dashboard', to: '/dashboard' },
-                    { label: '🗺️  Route Check', to: '/route' },
+                    { label: '👤  Profile',       to: '/profile'   },
+                    { label: '📊  Dashboard',     to: '/dashboard' },
+                    { label: '🗺️  Route Check',  to: '/route'     },
+                    { label: '📖  Blog',          to: '/blog'      },
+                    { label: '❓  FAQ',           to: '/faq'       },
                   ].map(item => (
-                    <Link key={item.to} to={item.to}
-                      onClick={() => setMenuOpen(false)}
-                      style={{
-                        display: 'block', padding: '12px 18px',
-                        fontFamily: 'var(--font-cond)', fontSize: 14, color: 'var(--text)',
-                        borderBottom: '1px solid var(--border)',
-                      }}
-                    >{item.label}</Link>
+                    <Link key={item.to} to={item.to} onClick={() => setMenuOpen(false)} style={{
+                      display: 'block', padding: '12px 18px',
+                      fontFamily: 'var(--font-cond)', fontSize: 14, color: 'var(--text)',
+                      borderBottom: '1px solid var(--border)', textDecoration: 'none',
+                    }}>{item.label}</Link>
                   ))}
                   <button onClick={handleLogout} style={{
-                    width: '100%', padding: '12px 18px', background: 'none',
-                    border: 'none', cursor: 'pointer', textAlign: 'left',
+                    width: '100%', padding: '12px 18px', background: 'none', border: 'none',
+                    cursor: 'pointer', textAlign: 'left',
                     fontFamily: 'var(--font-cond)', fontSize: 14, color: 'var(--red)',
                   }}>🚪  Logout</button>
                 </div>
               )}
             </div>
           ) : (
-            <div style={{ display: 'flex', gap: 10 }}>
+            <div style={{ display: 'flex', gap: 8 }}>
               <Link to="/login"  className="btn btn-outline btn-sm">Login</Link>
               <Link to="/signup" className="btn btn-primary btn-sm">Sign Up</Link>
             </div>
           )}
         </div>
       </div>
-
-      <style>{`
-        @media (max-width: 700px) {
-          .desktop-nav { display: none !important; }
-        }
-      `}</style>
+      <style>{`@media(max-width:700px){.desktop-nav{display:none!important}}`}</style>
     </header>
   );
 }
