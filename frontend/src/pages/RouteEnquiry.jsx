@@ -220,6 +220,31 @@ export default function RouteEnquiry() {
                   </span>
                 </div>
 
+                {/* Distance + Travel Time */}
+                {routeResult.route?.routes?.[0] && (() => {
+                  const distM = routeResult.route.routes[0].distance;
+                  const distKm = (distM / 1000).toFixed(1);
+                  const bikeMin = Math.round((distM / 1000) / 20 * 60);
+                  const taxiMin = Math.round((distM / 1000) / 28 * 60);
+                  const fmt = m => m < 60 ? `${m} min` : `${Math.floor(m/60)}h ${m%60}min`;
+                  return (
+                    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:16 }}>
+                      <div style={{ background:'var(--bg-2)', borderRadius:8, padding:'10px 12px', textAlign:'center' }}>
+                        <div style={{ fontFamily:'var(--font-display)', fontWeight:700, fontSize:20, color:'var(--bl, #00B0FF)' }}>{distKm} km</div>
+                        <div style={{ fontFamily:'var(--font-cond)', fontSize:10, letterSpacing:.8, color:'var(--text-muted)', textTransform:'uppercase', marginTop:2 }}>Distance</div>
+                      </div>
+                      <div style={{ background:'var(--bg-2)', borderRadius:8, padding:'10px 12px', textAlign:'center' }}>
+                        <div style={{ fontFamily:'var(--font-display)', fontWeight:700, fontSize:20, color:'var(--amber)' }}>{fmt(bikeMin)}</div>
+                        <div style={{ fontFamily:'var(--font-cond)', fontSize:10, letterSpacing:.8, color:'var(--text-muted)', textTransform:'uppercase', marginTop:2 }}>🛵 Bike / Auto</div>
+                      </div>
+                      <div style={{ background:'var(--bg-2)', borderRadius:8, padding:'10px 12px', textAlign:'center' }}>
+                        <div style={{ fontFamily:'var(--font-display)', fontWeight:700, fontSize:20, color:'var(--green)' }}>{fmt(taxiMin)}</div>
+                        <div style={{ fontFamily:'var(--font-cond)', fontSize:10, letterSpacing:.8, color:'var(--text-muted)', textTransform:'uppercase', marginTop:2 }}>🚕 Taxi / Car</div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* Segment scores */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 16 }}>
                   {[
