@@ -4,13 +4,21 @@ from pydantic import BaseModel
 from typing import Optional
 from bson import ObjectId
 from datetime import datetime
+from pathlib import Path
 import os, math, httpx, pandas as pd
 from dotenv import load_dotenv
-from database import get_verified_db, verify_sync_db
-from auth import hash_password, verify_password, create_access_token, get_current_user
-from train_model import train_and_save_model, get_model_prediction, get_feature_importance
+
+try:
+    from database import get_verified_db, verify_sync_db
+    from auth import hash_password, verify_password, create_access_token, get_current_user
+    from train_model import train_and_save_model, get_model_prediction, get_feature_importance
+except ImportError:
+    from backend.database import get_verified_db, verify_sync_db
+    from backend.auth import hash_password, verify_password, create_access_token, get_current_user
+    from backend.train_model import train_and_save_model, get_model_prediction, get_feature_importance
 
 load_dotenv()
+BASE_DIR = Path(__file__).resolve().parent
 
 app = FastAPI(title="SafePrayag API", version="2.0.1")
 import os
@@ -606,8 +614,8 @@ async def startup():
         db = await get_verified_db()
         n = await db.crimes.count_documents({})
         if n == 0:
-            csv_path = "data/crime_data_latlong.csv"
-            if os.path.exists(csv_path):
+            csv_path = BASE_DIR / "data" / "crime_data_latlong.csv"
+            if csv_path.exists():
                 print("[SafePrayag] Seeding crime data...")
                 df = pd.read_csv(csv_path)
                 await db.crimes.insert_many(df.where(pd.notnull(df), None).to_dict("records"))
