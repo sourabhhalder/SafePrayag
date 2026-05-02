@@ -153,10 +153,9 @@ async def send_sms(phone: str, message: str):
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 async def root():
     return {"service": "SafePrayag API v2", "docs": "/docs", "health": "/health"}
-
 @app.get("/health")
 async def health():
     return {"status": "ok", "version": "2.0.0", "service": "SafePrayag"}
