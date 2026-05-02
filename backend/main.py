@@ -13,8 +13,15 @@ from train_model import train_and_save_model, get_model_prediction, get_feature_
 load_dotenv()
 
 app = FastAPI(title="SafePrayag API", version="2.0.0")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=False,
-    allow_methods=["*"], allow_headers=["*"])
+import os
+_origins = os.getenv("ALLOWED_ORIGINS", "*")
+_origin_list = [o.strip() for o in _origins.split(",")] if _origins != "*" else ["*"]
+
+app.add_middleware(CORSMiddleware,
+    allow_origins=_origin_list,
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"])
 
 PS = [
     {"name":"George Town PS","lat":25.4484,"lon":81.8322,"phone":"0532-2623333"},
