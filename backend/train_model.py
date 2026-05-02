@@ -5,11 +5,15 @@ import xgboost as xgb
 import joblib
 import os
 from typing import Optional
+from pathlib import Path
 
-MODEL_PATH = "models/xgboost_model.pkl"
-LE_TIME_PATH = "models/le_time.pkl"
-LE_AGE_PATH = "models/le_age.pkl"
-LE_GENDER_PATH = "models/le_gender.pkl"
+BASE_DIR = Path(__file__).resolve().parent
+MODEL_DIR = BASE_DIR / "models"
+DATA_PATH = BASE_DIR / "data" / "crime_data_latlong.csv"
+MODEL_PATH = MODEL_DIR / "xgboost_model.pkl"
+LE_TIME_PATH = MODEL_DIR / "le_time.pkl"
+LE_AGE_PATH = MODEL_DIR / "le_age.pkl"
+LE_GENDER_PATH = MODEL_DIR / "le_gender.pkl"
 
 _model = None
 _le_time = None
@@ -19,7 +23,7 @@ _le_gender = None
 
 def load_models():
     global _model, _le_time, _le_age, _le_gender
-    if os.path.exists(MODEL_PATH):
+    if MODEL_PATH.exists():
         try:
             _model = joblib.load(MODEL_PATH)
             _le_time = joblib.load(LE_TIME_PATH)
@@ -39,9 +43,8 @@ def train_and_save_model(df: Optional[pd.DataFrame] = None):
     print("[SafePrayag] Starting XGBoost training...")
 
     if df is None:
-        csv_path = "data/crime_data_latlong.csv"
-        if os.path.exists(csv_path):
-            df = pd.read_csv(csv_path)
+        if DATA_PATH.exists():
+            df = pd.read_csv(DATA_PATH)
             print(f"[SafePrayag] Loaded {len(df)} records from CSV.")
         else:
             print("[SafePrayag] No CSV found — generating synthetic Prayagraj data...")
@@ -109,7 +112,7 @@ def train_and_save_model(df: Optional[pd.DataFrame] = None):
     )
     model.fit(X, y)
 
-    os.makedirs("models", exist_ok=True)
+    MODEL_DIR.mkdir(parents=True, exist_ok=True)
     joblib.dump(model, MODEL_PATH)
     joblib.dump(le_time, LE_TIME_PATH)
     joblib.dump(le_age, LE_AGE_PATH)
