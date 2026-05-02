@@ -12,4 +12,6 @@ services:
         sync: false
       - key: FAST2SMS_API_KEY
         sync: false
+      - key: ALLOWED_ORIGINS
+        value: https://safeprayag-frontend.vercel.app,https://safeprayag.vercel.app
     autoDeploy: true

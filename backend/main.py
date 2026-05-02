@@ -6,25 +6,26 @@ from bson import ObjectId
 from datetime import datetime
 import os, math, httpx, pandas as pd
 from dotenv import load_dotenv
-from database import get_db, get_sync_db
+from database import get_verified_db, verify_sync_db
 from auth import hash_password, verify_password, create_access_token, get_current_user
 from train_model import train_and_save_model, get_model_prediction, get_feature_importance
 
 load_dotenv()
 
-app = FastAPI(title="SafePrayag API", version="2.0.0")
+app = FastAPI(title="SafePrayag API", version="2.0.1")
 import os
-_origins = os.getenv("ALLOWED_ORIGINS", "*")
-_origin_list = [o.strip() for o in _origins.split(",")] if _origins != "*" else ["*"]
+_origins = os.getenv("ALLOWED_ORIGINS", "")
+_origin_list = [o.strip() for o in _origins.split(",") if o.strip()]
+if not _origin_list:
+    _origin_list = [
+        "https://safeprayag-frontend.vercel.app",
+        "https://safeprayag.vercel.app",
+        "http://localhost:3000",
+    ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://safeprayag-frontend.vercel.app",
-        "https://safeprayag-frontend-git-main-sourabhhalders-projects.vercel.app",
-        "http://localhost:3000",
-        "*",
-    ],
+    allow_origins=_origin_list,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -158,11 +159,21 @@ async def root():
     return {"service": "SafePrayag API v2", "docs": "/docs", "health": "/health"}
 @app.get("/health")
 async def health():
-    return {"status": "ok", "version": "2.0.0", "service": "SafePrayag"}
+    db_ok = True
+    try:
+        await get_verified_db()
+    except HTTPException:
+        db_ok = False
+    return {
+        "status": "ok" if db_ok else "degraded",
+        "version": "2.0.1",
+        "service": "SafePrayag",
+        "database": "connected" if db_ok else "unreachable",
+    }
 
 @app.post("/auth/signup")
 async def signup(req: Signup):
-    db = await get_db()
+    db = await get_verified_db()
     if await db.users.find_one({"email": req.email}):
         raise HTTPException(400, "Email already registered.")
     r = await db.users.insert_one({
@@ -182,7 +193,7 @@ async def signup(req: Signup):
 
 @app.post("/auth/login")
 async def login(req: Login):
-    db = await get_db()
+    db = await get_verified_db()
     u = await db.users.find_one({"email": req.email})
     if not u:
         raise HTTPException(401, "No account with this email.")
@@ -198,7 +209,7 @@ async def login(req: Login):
 @app.get("/auth/profile")
 async def get_profile(request: Request):
     cu = await get_current_user(request)
-    db = await get_db()
+    db = await get_verified_db()
     u = await db.users.find_one({"_id": oid(cu["sub"])})
     if not u:
         raise HTTPException(404, "User not found.")
@@ -214,7 +225,7 @@ async def get_profile(request: Request):
 async def update_profile(request: Request):
     """Accept any JSON body and update non-null fields — fixes profile save."""
     cu = await get_current_user(request)
-    db = await get_db()
+    db = await get_verified_db()
 
     try:
         body = await request.json()
@@ -242,7 +253,7 @@ async def update_profile(request: Request):
 @app.post("/route/analyse")
 async def analyse(req: RouteReq, request: Request):
     cu = await get_current_user(request)
-    db = await get_db()
+    db = await get_verified_db()
     await db.users.update_one({"_id": oid(cu["sub"])}, {"$inc": {"routes_checked": 1}})
 
     fs = get_model_prediction(req.from_lat, req.from_lon, req.time_of_day, req.age_group, req.gender)
@@ -297,7 +308,7 @@ async def predict(lat: float, lon: float, time_of_day: str="Evening",
 @app.post("/sos/trigger")
 async def sos_trigger(req: SOSReq, bg: BackgroundTasks, request: Request):
     cu = await get_current_user(request)
-    db = await get_db()
+    db = await get_verified_db()
     u = await db.users.find_one({"_id": oid(cu["sub"])})
     if not u:
         raise HTTPException(404, "User not found.")
@@ -340,7 +351,7 @@ async def sos_trigger(req: SOSReq, bg: BackgroundTasks, request: Request):
 @app.post("/sos/location-update")
 async def loc_update(req: LocUpdate, request: Request):
     cu = await get_current_user(request)
-    db = await get_db()
+    db = await get_verified_db()
     await db.location_updates.insert_one({
         "user_id": cu["sub"], "lat": req.lat, "lon": req.lon,
         "route_id": req.route_id, "timestamp": datetime.utcnow(),
@@ -363,7 +374,7 @@ async def loc_update(req: LocUpdate, request: Request):
 @app.post("/incidents/report")
 async def report(req: IncidentReq, bg: BackgroundTasks, request: Request):
     cu = await get_current_user(request)
-    db = await get_db()
+    db = await get_verified_db()
     now = datetime.utcnow()
     r = await db.crimes.insert_one({
         "user_id": cu["sub"], "latitude": req.lat, "longitude": req.lon,
@@ -378,7 +389,7 @@ async def report(req: IncidentReq, bg: BackgroundTasks, request: Request):
 
 def _retrain_bg():
     try:
-        db = get_sync_db()
+        db = verify_sync_db()
         rows = list(db.crimes.find({}, {"_id": 0}))
         if len(rows) >= 100:
             train_and_save_model(pd.DataFrame(rows))
@@ -388,14 +399,14 @@ def _retrain_bg():
 
 @app.get("/heatmap")
 async def heatmap(limit: int = 500):
-    db = await get_db()
+    db = await get_verified_db()
     return [c async for c in db.crimes.find(
         {}, {"_id":0,"latitude":1,"longitude":1,"severity":1,"crime_type":1}
     ).limit(limit)]
 
 @app.get("/stats/hotspots")
 async def hotspots(limit: int = 10):
-    db = await get_db()
+    db = await get_verified_db()
     by_area = [
         {"area": d["_id"] or "Unknown", "count": d["count"],
          "lat": d["avg_lat"], "lon": d["avg_lon"], "top_crime": d["top_crime"]}
@@ -426,7 +437,7 @@ async def hotspots(limit: int = 10):
 @app.get("/stats/dashboard")
 async def dashboard(request: Request):
     cu = await get_current_user(request)
-    db = await get_db()
+    db = await get_verified_db()
 
     tc = await db.crimes.count_documents({})
     hr = await db.crimes.count_documents({"severity": {"$gte": 4}})
@@ -504,7 +515,7 @@ async def retrain():
 @app.get("/stats/extra")
 async def extra_stats():
     """Monthly trend, day-wise, police station stats, area-crime breakdown."""
-    db = await get_db()
+    db = await get_verified_db()
 
     # Monthly crime trend (parses DD-MM-YYYY format from CSV)
     monthly = [
@@ -592,7 +603,7 @@ async def extra_stats():
 async def startup():
     print("[SafePrayag] Starting up...")
     try:
-        db = await get_db()
+        db = await get_verified_db()
         n = await db.crimes.count_documents({})
         if n == 0:
             csv_path = "data/crime_data_latlong.csv"
