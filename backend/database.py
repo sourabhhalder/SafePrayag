@@ -1,5 +1,7 @@
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo import MongoClient
+from pymongo.errors import PyMongoError
+from fastapi import HTTPException
 import os
 from dotenv import load_dotenv
 
@@ -29,6 +31,17 @@ async def get_db():
         _async_client = _make_async_client()
     return _async_client[DB_NAME]
 
+async def get_verified_db():
+    db = await get_db()
+    try:
+        await db.command("ping")
+    except PyMongoError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Database connection failed. Check Render MONGODB_URL and MongoDB Atlas network access.",
+        ) from exc
+    return db
+
 def get_sync_db():
     """Synchronous client for background tasks (model retraining)."""
     kwargs = {
@@ -39,6 +52,17 @@ def get_sync_db():
         kwargs["tlsAllowInvalidCertificates"] = True
     client = MongoClient(MONGODB_URL, **kwargs)
     return client[DB_NAME]
+
+def verify_sync_db():
+    try:
+        db = get_sync_db()
+        db.command("ping")
+        return db
+    except PyMongoError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Database connection failed. Check Render MONGODB_URL and MongoDB Atlas network access.",
+        ) from exc
 
 async def close_db():
     global _async_client
