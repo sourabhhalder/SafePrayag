@@ -17,11 +17,18 @@ import os
 _origins = os.getenv("ALLOWED_ORIGINS", "*")
 _origin_list = [o.strip() for o in _origins.split(",")] if _origins != "*" else ["*"]
 
-app.add_middleware(CORSMiddleware,
-    allow_origins=_origin_list,
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://safeprayag-frontend.vercel.app",
+        "https://safeprayag-frontend-git-main-sourabhhalders-projects.vercel.app",
+        "http://localhost:3000",
+        "*",
+    ],
     allow_credentials=False,
     allow_methods=["*"],
-    allow_headers=["*"])
+    allow_headers=["*"],
+)
 
 PS = [
     {"name":"George Town PS","lat":25.4484,"lon":81.8322,"phone":"0532-2623333"},
