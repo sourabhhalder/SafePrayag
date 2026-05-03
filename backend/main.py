@@ -12,6 +12,7 @@ try:
     from database import get_verified_db, verify_sync_db
     from auth import hash_password, verify_password, create_access_token, get_current_user
     from train_model import train_and_save_model, get_model_prediction, get_feature_importance
+    from notifications import send_sos_alerts
 except ImportError:
     from backend.database import get_verified_db, verify_sync_db
     from backend.auth import hash_password, verify_password, create_access_token, get_current_user
@@ -401,45 +402,38 @@ async def predict(lat: float, lon: float, time_of_day: str="Evening",
 @app.post("/sos/trigger")
 async def sos_trigger(req: SOSReq, bg: BackgroundTasks, request: Request):
     cu = await get_current_user(request)
-    db = await get_verified_db()
-    u = await db.users.find_one({"_id": oid(cu["sub"])})
+    db = await get_db()
+    u  = await db.users.find_one({"_id": oid(cu["sub"])})
     if not u:
         raise HTTPException(404, "User not found.")
 
-    print(f"\n[SOS] User: {u['name']} | Location: {req.lat},{req.lon}")
-    print(f"[SOS] Guardian phone in DB: '{u.get('guardian_phone','NOT SET')}'")
-
     n = dict(sorted(PS, key=lambda p: hav(req.lat, req.lon, p["lat"], p["lon"]))[0])
-    n["distance_km"] = round(hav(req.lat, req.lon, n["lat"], n["lon"])/1000, 2)
+    n["distance_km"] = round(hav(req.lat, req.lon, n["lat"], n["lon"]) / 1000, 2)
     maps = f"https://www.google.com/maps?q={req.lat},{req.lon}"
-    gp = (u.get("guardian_phone") or "").strip()
+    gp   = (u.get("guardian_phone") or "").strip()
 
-    guardian_notified = False
-    notifications = {"sms": False, "telegram": False, "whatsapp": False}
-    if gp:
-        msg = build_guardian_alert(u, req.lat, req.lon, n)
-        bg.add_task(send_sms, gp, msg)
-        bg.add_task(send_whatsapp, gp, msg)
-        bg.add_task(send_telegram, msg)
-        guardian_notified = True
-        notifications = {"sms": True, "telegram": True, "whatsapp": True}
-        print(f"[SOS] Notifications queued for guardian: {gp}")
-    else:
-        print("[SOS] No guardian phone — SMS skipped. Add it in Profile.")
+    print(f"\n[SOS] User: {u['name']} | {req.lat},{req.lon}")
+    print(f"[SOS] Guardian phone: '{gp or 'NOT SET'}'")
+
+    guardian_notified = bool(gp)
+    bg.add_task(send_sos_alerts, gp, u["name"], req.lat, req.lon, n["name"], n["phone"])
 
     await db.sos_events.insert_one({
         "user_id": cu["sub"], "user_name": u["name"],
-        "lat": req.lat, "lon": req.lon, "nearest_police": n["name"],
-        "guardian_notified": guardian_notified, "timestamp": datetime.utcnow(),
+        "lat": req.lat, "lon": req.lon,
+        "nearest_police": n["name"],
+        "guardian_notified": guardian_notified,
+        "timestamp": datetime.utcnow(),
     })
     await db.users.update_one({"_id": oid(cu["sub"])}, {"$inc": {"sos_count": 1}})
 
-    return {"message": "SOS triggered!", "guardian_notified": guardian_notified,
-            "notification_channels": notifications,
-            "nearest_police": n, "maps_link": maps,
-            "emergency_numbers": {"Police":"100","Women Helpline":"1091",
-                                   "Childline":"1098","Ambulance":"108",
-                                   "Nearest Station": n["phone"]}}
+    return {
+        "message": "SOS triggered!", "guardian_notified": guardian_notified,
+        "nearest_police": n, "maps_link": maps,
+        "emergency_numbers": {"Police":"100","Women Helpline":"1091",
+                               "Childline":"1098","Ambulance":"108",
+                               "Nearest Station": n["phone"]},
+    }
 
 @app.post("/sos/location-update")
 async def loc_update(req: LocUpdate, request: Request):
