@@ -147,19 +147,29 @@ def build_guardian_alert(user: dict, lat: float, lon: float, police: dict) -> st
         f"Nearest police: {police['name']} {police['phone']}"
     )
 
+def clean_indian_phone(phone: str) -> str:
+    digits = "".join(ch for ch in str(phone or "") if ch.isdigit())
+    if digits.startswith("91") and len(digits) == 12:
+        digits = digits[2:]
+    return digits
+
+def env_present(name: str) -> bool:
+    return bool(os.getenv(name, "").strip())
+
 # ── SMS ───────────────────────────────────────────────────────────────────────
 
 async def send_sms(phone: str, message: str):
     key = os.getenv("FAST2SMS_API_KEY", "").strip()
-    clean = phone.strip().replace("+91","").replace(" ","").replace("-","")
-    if clean.startswith("91") and len(clean) == 12:
-        clean = clean[2:]
+    clean = clean_indian_phone(phone)
 
     print(f"\n[SMS] To: {clean}")
     print(f"[SMS] Key set: {'YES (' + key[:8] + '...)' if key else 'NO — add FAST2SMS_API_KEY to .env'}")
 
     if not key:
         print(f"[SMS-SIM] Would send: {message}")
+        return
+    if len(clean) != 10:
+        print(f"[SMS] Invalid guardian phone '{phone}' after cleanup -> '{clean}'")
         return
 
     try:
@@ -174,7 +184,7 @@ async def send_sms(phone: str, message: str):
             if result.get("return"):
                 print(f"[SMS] ✅ Sent to {clean}")
             else:
-                print(f"[SMS] ❌ Rejected: {result.get('message','Unknown')}")
+                print(f"[SMS] ❌ Rejected: {result.get('message','Unknown')} | errors: {result.get('errors_keys', [])}")
     except Exception as e:
         print(f"[SMS] ❌ Error: {e}")
 
@@ -194,8 +204,10 @@ async def send_telegram(message: str):
                 f"https://api.telegram.org/bot{token}/sendMessage",
                 json={"chat_id": chat_id, "text": message},
             )
-            print(f"[Telegram] Status: {r.status_code}")
-            r.raise_for_status()
+            result = r.json()
+            print(f"[Telegram] Status: {r.status_code} | Response: {result}")
+            if not result.get("ok"):
+                print(f"[Telegram] ❌ Rejected: {result.get('description', 'Unknown Telegram error')}")
     except Exception as e:
         print(f"[Telegram] Error: {e}")
 
@@ -203,13 +215,14 @@ async def send_whatsapp(phone: str, message: str):
     token = os.getenv("WHATSAPP_ACCESS_TOKEN", "").strip()
     phone_number_id = os.getenv("WHATSAPP_PHONE_NUMBER_ID", "").strip()
     template_name = os.getenv("WHATSAPP_TEMPLATE_NAME", "").strip()
-    clean = phone.strip().replace("+91","").replace(" ","").replace("-","")
-    if clean.startswith("91") and len(clean) == 12:
-        clean = clean[2:]
+    clean = clean_indian_phone(phone)
 
     if not token or not phone_number_id:
         print("[WhatsApp-SIM] Missing WHATSAPP_ACCESS_TOKEN or WHATSAPP_PHONE_NUMBER_ID.")
         print(f"[WhatsApp-SIM] Would send to {clean}: {message}")
+        return
+    if len(clean) != 10:
+        print(f"[WhatsApp] Invalid guardian phone '{phone}' after cleanup -> '{clean}'")
         return
 
     payload = {
@@ -236,7 +249,8 @@ async def send_whatsapp(phone: str, message: str):
                 headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
                 json=payload,
             )
-            print(f"[WhatsApp] Status: {r.status_code}")
+            body = r.text
+            print(f"[WhatsApp] Status: {r.status_code} | Response: {body}")
             r.raise_for_status()
     except Exception as e:
         print(f"[WhatsApp] Error: {e}")
@@ -256,6 +270,11 @@ async def health():
         "version": "2.0.1",
         "service": "SafePrayag",
         "database": "connected" if db_ok else "unreachable",
+        "notifications": {
+            "fast2sms_configured": env_present("FAST2SMS_API_KEY"),
+            "telegram_configured": env_present("TELEGRAM_BOT_TOKEN") and env_present("TELEGRAM_CHAT_ID"),
+            "whatsapp_configured": env_present("WHATSAPP_ACCESS_TOKEN") and env_present("WHATSAPP_PHONE_NUMBER_ID"),
+        },
     }
 
 @app.post("/auth/signup")
