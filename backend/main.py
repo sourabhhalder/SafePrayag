@@ -123,6 +123,14 @@ def oid(s):
     except Exception:
         raise HTTPException(400, f"Invalid ID: {s}")
 
+def mask_phone(phone: str) -> str:
+    digits = "".join(ch for ch in str(phone or "") if ch.isdigit())
+    if len(digits) >= 10:
+        return f"{digits[0]}xxxxx{digits[-4:]}"
+    if len(digits) >= 5:
+        return f"{digits[0]}xxx{digits[-2:]}"
+    return digits or "unknown"
+
 # ── SMS ───────────────────────────────────────────────────────────────────────
 
 async def send_sms(phone: str, message: str):
@@ -325,11 +333,14 @@ async def sos_trigger(req: SOSReq, bg: BackgroundTasks, request: Request):
 
     guardian_notified = False
     if gp:
+        timestamp = datetime.now().strftime("%I:%M:%S%p")
+        masked_user_phone = mask_phone(u.get("phone", ""))
         msg = (
-            f"SafePrayag: {u['name']} needs immediate help. "
+            f"Greetings! This is a Safe Prayag system update. "
+            f"User contact: {masked_user_phone}. "
+            f"Time ({timestamp}) Status: GO. "
             f"Location: {round(req.lat,4)},{round(req.lon,4)}. "
-            f"Contact {n['name']} on {n['phone']}. "
-            f"Please respond now. Search coordinates online."
+            f"Nearest police contact: {n['name']} {n['phone']}."
         )
         bg.add_task(send_sms, gp, msg)
         guardian_notified = True
