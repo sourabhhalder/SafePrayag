@@ -131,6 +131,18 @@ def mask_phone(phone: str) -> str:
         return f"{digits[0]}xxx{digits[-2:]}"
     return digits or "unknown"
 
+def build_guardian_alert(user: dict, lat: float, lon: float, police: dict) -> str:
+    timestamp = datetime.now().strftime("%I:%M:%S%p")
+    masked_user_phone = mask_phone(user.get("phone", ""))
+    return (
+        f"SafePrayag alert\n"
+        f"User contact: {masked_user_phone}\n"
+        f"Time: {timestamp}\n"
+        f"Status: GO\n"
+        f"Location: {round(lat,4)},{round(lon,4)}\n"
+        f"Nearest police: {police['name']} {police['phone']}"
+    )
+
 # ── SMS ───────────────────────────────────────────────────────────────────────
 
 async def send_sms(phone: str, message: str):
@@ -163,6 +175,67 @@ async def send_sms(phone: str, message: str):
         print(f"[SMS] ❌ Error: {e}")
 
 # ── Routes ────────────────────────────────────────────────────────────────────
+
+async def send_telegram(message: str):
+    token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+    chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
+    if not token or not chat_id:
+        print("[Telegram-SIM] Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID.")
+        print(f"[Telegram-SIM] Would send: {message}")
+        return
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as c:
+            r = await c.post(
+                f"https://api.telegram.org/bot{token}/sendMessage",
+                json={"chat_id": chat_id, "text": message},
+            )
+            print(f"[Telegram] Status: {r.status_code}")
+            r.raise_for_status()
+    except Exception as e:
+        print(f"[Telegram] Error: {e}")
+
+async def send_whatsapp(phone: str, message: str):
+    token = os.getenv("WHATSAPP_ACCESS_TOKEN", "").strip()
+    phone_number_id = os.getenv("WHATSAPP_PHONE_NUMBER_ID", "").strip()
+    template_name = os.getenv("WHATSAPP_TEMPLATE_NAME", "").strip()
+    clean = phone.strip().replace("+91","").replace(" ","").replace("-","")
+    if clean.startswith("91") and len(clean) == 12:
+        clean = clean[2:]
+
+    if not token or not phone_number_id:
+        print("[WhatsApp-SIM] Missing WHATSAPP_ACCESS_TOKEN or WHATSAPP_PHONE_NUMBER_ID.")
+        print(f"[WhatsApp-SIM] Would send to {clean}: {message}")
+        return
+
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": f"91{clean}",
+        "type": "text",
+        "text": {"body": message},
+    }
+    if template_name:
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": f"91{clean}",
+            "type": "template",
+            "template": {
+                "name": template_name,
+                "language": {"code": "en"},
+            },
+        }
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as c:
+            r = await c.post(
+                f"https://graph.facebook.com/v22.0/{phone_number_id}/messages",
+                headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+                json=payload,
+            )
+            print(f"[WhatsApp] Status: {r.status_code}")
+            r.raise_for_status()
+    except Exception as e:
+        print(f"[WhatsApp] Error: {e}")
 
 @app.api_route("/", methods=["GET", "HEAD"])
 async def root():
@@ -332,19 +405,15 @@ async def sos_trigger(req: SOSReq, bg: BackgroundTasks, request: Request):
     gp = (u.get("guardian_phone") or "").strip()
 
     guardian_notified = False
+    notifications = {"sms": False, "telegram": False, "whatsapp": False}
     if gp:
-        timestamp = datetime.now().strftime("%I:%M:%S%p")
-        masked_user_phone = mask_phone(u.get("phone", ""))
-        msg = (
-            f"Greetings! This is a Safe Prayag system update. "
-            f"User contact: {masked_user_phone}. "
-            f"Time ({timestamp}) Status: GO. "
-            f"Location: {round(req.lat,4)},{round(req.lon,4)}. "
-            f"Nearest police contact: {n['name']} {n['phone']}."
-        )
+        msg = build_guardian_alert(u, req.lat, req.lon, n)
         bg.add_task(send_sms, gp, msg)
+        bg.add_task(send_whatsapp, gp, msg)
+        bg.add_task(send_telegram, msg)
         guardian_notified = True
-        print(f"[SOS] SMS queued for: {gp}")
+        notifications = {"sms": True, "telegram": True, "whatsapp": True}
+        print(f"[SOS] Notifications queued for guardian: {gp}")
     else:
         print("[SOS] No guardian phone — SMS skipped. Add it in Profile.")
 
@@ -356,6 +425,7 @@ async def sos_trigger(req: SOSReq, bg: BackgroundTasks, request: Request):
     await db.users.update_one({"_id": oid(cu["sub"])}, {"$inc": {"sos_count": 1}})
 
     return {"message": "SOS triggered!", "guardian_notified": guardian_notified,
+            "notification_channels": notifications,
             "nearest_police": n, "maps_link": maps,
             "emergency_numbers": {"Police":"100","Women Helpline":"1091",
                                    "Childline":"1098","Ambulance":"108",
