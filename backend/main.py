@@ -93,6 +93,10 @@ class SOSReq(BaseModel):
 class LocUpdate(BaseModel):
     lat: float; lon: float; route_id: Optional[str] = None
 
+class NotifyTestReq(BaseModel):
+    phone: Optional[str] = None
+    message: Optional[str] = None
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def hav(a, b, c, d):
@@ -459,6 +463,31 @@ async def loc_update(req: LocUpdate, request: Request):
         except Exception:
             pass
     return {"received": True, "deviation_alert": dev}
+
+@app.post("/debug/notify-test")
+async def notify_test(req: NotifyTestReq, request: Request, bg: BackgroundTasks):
+    cu = await get_current_user(request)
+    db = await get_verified_db()
+    u = await db.users.find_one({"_id": oid(cu["sub"])})
+    if not u:
+        raise HTTPException(404, "User not found.")
+
+    phone = (req.phone or u.get("guardian_phone") or "").strip()
+    if not phone:
+        raise HTTPException(400, "Guardian phone not set.")
+
+    demo_police = PS[0]
+    msg = req.message or build_guardian_alert(u, 25.4358, 81.8463, demo_police)
+
+    bg.add_task(send_sms, phone, msg)
+    bg.add_task(send_whatsapp, phone, msg)
+    bg.add_task(send_telegram, msg)
+    return {
+        "queued": True,
+        "phone": phone,
+        "notification_channels": {"sms": True, "telegram": True, "whatsapp": True},
+        "message_preview": msg,
+    }
 
 @app.post("/incidents/report")
 async def report(req: IncidentReq, bg: BackgroundTasks, request: Request):
